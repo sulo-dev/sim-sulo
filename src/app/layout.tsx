@@ -20,7 +20,9 @@ export default function RootLayout({
   return (
     <html lang="id" suppressHydrationWarning>
       {/* transisi warna bg agar pergantian tema mulus */}
-      <body className={`${inter.className} bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 antialiased selection:bg-indigo-500 selection:text-white transition-colors duration-300`}>
+      <body
+        className={`${inter.className} bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 antialiased selection:bg-indigo-500 selection:text-white transition-colors duration-300`}
+      >
         <ThemeProvider attribute="class" defaultTheme="dark" enableSystem>
           <AuthProvider>
             <div className="flex h-screen overflow-hidden">

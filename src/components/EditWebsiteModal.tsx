@@ -2,61 +2,44 @@
 
 import { useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
+import { button } from "framer-motion/client";
 
 type Props = {
   isOpen: boolean;
   onClose: () => void;
+  website: any;
 };
 
-export default function AddClientModal({ isOpen, onClose }: Props) {
+export default function EditWebsiteModal({ isOpen, onClose, website }: Props) {
   const [isLoading, setIsLoading] = useState(false);
-  const [submitStatus, setSubmitStatus] = useState<'idle' | 'success' | 'error'>('idle');
-  
-  // State untuk nomor telepon & pesan error validasi
-  const [phone, setPhone] = useState("");
-  const [phoneError, setPhoneError] = useState("");
+  const [submitStatus, setSubmitStatus] = useState<'idle' | 'success'>('idle');
 
-  // Handler untuk menyaring input agar HANYA ANGKA
-  const handlePhoneChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const value = e.target.value;
-    const numericValue = value.replace(/[^0-9]/g, "");
-    setPhone(numericValue);
-    
-    // Hapus pesan error jika sudah mencapai/lebih dari 10 digit
-    if (numericValue.length >= 10) {
-      setPhoneError("");
-    }
-  };
+  // Gunakan data website untuk mengisi nilai awal (default value)
+  const [projectName, setProjectName] = useState(website?.name || "");
+  const [techStack, setTechStack] = useState(
+    website?.stack || (website?.techStack ? website.techStack.join(", ") : "")
+  );
+  const [status, setStatus] = useState(website?.status || "Active Contract");
+  const [url, setUrl] = useState(website?.productionUrl || website?.url || "");
 
-  // Fungsi penutupan modal dengan reset state
   const handleClose = () => {
     onClose();
     setTimeout(() => {
       setSubmitStatus('idle');
       setIsLoading(false);
-      setPhone("");
-      setPhoneError("");
     }, 300);
   };
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    
-    // VALIDASI GANDA: Pastikan minimal 10 digit sebelum memproses
-    if (phone.length < 10) {
-      setPhoneError("Nomor telepon tidak valid (wajib minimal 10 digit angka).");
-      return; // Menghentikan eksekusi submit
-    }
-
-    setPhoneError("");
     setIsLoading(true);
     
-    // Simulasi proses penyimpanan API (1.5 detik)
+    // Simulasi jeda API 1.5 detik
     setTimeout(() => {
       setIsLoading(false);
       setSubmitStatus('success');
       
-      // Tutup otomatis setelah 2.5 detik
+      // Auto tutup setelah 2.5 detik
       setTimeout(() => {
         handleClose();
       }, 2500);
@@ -97,11 +80,12 @@ export default function AddClientModal({ isOpen, onClose }: Props) {
               <div className="flex items-center justify-between p-6 border-b border-slate-100 dark:border-slate-800 bg-slate-50 dark:bg-slate-900/50">
                 <div className="flex items-center gap-3">
                   <span className="p-2.5 bg-[#011D58]/10 dark:bg-[#FF9F03]/10 text-[#011D58] dark:text-[#FF9F03] rounded-xl shadow-inner">
-                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" /></svg>
+                    {/* Ikon Code / Monitor */}
+                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 20l4-16m4 4l4 4-4 4M6 16l-4-4 4-4" /></svg>
                   </span>
                   <div>
-                    <h3 className="text-lg font-bold text-slate-900 dark:text-white">Tambah Klien Baru</h3>
-                    <p className="text-xs font-medium text-slate-500 mt-0.5">Registrasi data perusahaan & PIC klien.</p>
+                    <h3 className="text-lg font-bold text-slate-900 dark:text-white">Edit Proyek Website</h3>
+                    <p className="text-xs font-medium text-slate-500 mt-0.5">Perbarui informasi teknis dan status proyek.</p>
                   </div>
                 </div>
                 <button 
@@ -115,66 +99,56 @@ export default function AddClientModal({ isOpen, onClose }: Props) {
               {/* Form Body */}
               <form onSubmit={handleSubmit}>
                 <div className="p-6 space-y-5">
+                  <div>
+                    <label className="block text-[11px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400 mb-1.5">Nama Proyek *</label>
+                    <input 
+                      type="text" 
+                      required 
+                      value={projectName}
+                      onChange={(e) => setProjectName(e.target.value)}
+                      placeholder="Contoh: Portal Desa Digital" 
+                      className="w-full bg-slate-50 dark:bg-slate-950/50 border border-slate-200 dark:border-slate-800 text-slate-900 dark:text-slate-200 text-sm rounded-xl focus:ring-[#FC7A0B] focus:border-[#FC7A0B] block p-3 outline-none transition-colors shadow-sm dark:shadow-none" 
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-[11px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400 mb-1.5">URL Production</label>
+                    <input 
+                      type="url" 
+                      value={url}
+                      onChange={(e) => setUrl(e.target.value)}
+                      placeholder="https://namaproyek.com" 
+                      className="w-full bg-slate-50 dark:bg-slate-950/50 border border-slate-200 dark:border-slate-800 text-slate-900 dark:text-slate-200 text-sm rounded-xl focus:ring-[#FC7A0B] focus:border-[#FC7A0B] block p-3 outline-none transition-colors shadow-sm dark:shadow-none" 
+                    />
+                  </div>
+                  
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
                     <div>
-                      <label className="block text-[11px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400 mb-1.5">Nama Perusahaan *</label>
+                      <label className="block text-[11px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400 mb-1.5">Tech Stack *</label>
                       <input 
                         type="text" 
                         required 
-                        placeholder="Contoh: PT. SULO Teknologi" 
+                        value={techStack}
+                        onChange={(e) => setTechStack(e.target.value)}
+                        placeholder="Next.js, Tailwind, Prisma..." 
                         className="w-full bg-slate-50 dark:bg-slate-950/50 border border-slate-200 dark:border-slate-800 text-slate-900 dark:text-slate-200 text-sm rounded-xl focus:ring-[#FC7A0B] focus:border-[#FC7A0B] block p-3 outline-none transition-colors shadow-sm dark:shadow-none" 
                       />
+                      <p className="text-[10px] text-slate-400 mt-1.5">Pisahkan dengan koma (,)</p>
                     </div>
                     <div>
-                      <label className="block text-[11px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400 mb-1.5">Nama PIC *</label>
-                      <input 
-                        type="text" 
-                        required 
-                        placeholder="Contoh: Budi Santoso" 
-                        className="w-full bg-slate-50 dark:bg-slate-950/50 border border-slate-200 dark:border-slate-800 text-slate-900 dark:text-slate-200 text-sm rounded-xl focus:ring-[#FC7A0B] focus:border-[#FC7A0B] block p-3 outline-none transition-colors shadow-sm dark:shadow-none" 
-                      />
+                      <label className="block text-[11px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400 mb-1.5">Status Proyek *</label>
+                      <select 
+                        required
+                        value={status}
+                        onChange={(e) => setStatus(e.target.value)}
+                        className="w-full bg-slate-50 dark:bg-slate-950/50 border border-slate-200 dark:border-slate-800 text-slate-900 dark:text-slate-200 text-sm rounded-xl focus:ring-[#FC7A0B] focus:border-[#FC7A0B] block p-3 outline-none transition-colors shadow-sm dark:shadow-none cursor-pointer"
+                      >
+                        <option value="Active Contract">Aktif (Active Contract)</option>
+                        <option value="Warranty">Masa Garansi (Warranty)</option>
+                        <option value="Development">Tahap Development</option>
+                        <option value="Inactive">Tidak Aktif / Selesai</option>
+                      </select>
                     </div>
-                    <div>
-                      <label className="block text-[11px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400 mb-1.5">Email Kontak</label>
-                      <input 
-                        type="email" 
-                        placeholder="budi@perusahaan.com" 
-                        className="w-full bg-slate-50 dark:bg-slate-950/50 border border-slate-200 dark:border-slate-800 text-slate-900 dark:text-slate-200 text-sm rounded-xl focus:ring-[#FC7A0B] focus:border-[#FC7A0B] block p-3 outline-none transition-colors shadow-sm dark:shadow-none" 
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-[11px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400 mb-1.5">Nomor Telepon / WA *</label>
-                      <input 
-                        type="text" 
-                        inputMode="numeric"
-                        required // <-- Pastikan ini ada
-                        minLength={10} // <-- BLOKIR JIKA KURANG DARI 10 DIGIT
-                        maxLength={15} // <-- MAKSIMAL 15 DIGIT ANGKA
-                        value={phone}
-                        onChange={handlePhoneChange}
-                        placeholder="081234567890" 
-                        className={`w-full bg-slate-50 dark:bg-slate-950/50 border text-slate-900 dark:text-slate-200 text-sm rounded-xl block p-3 outline-none transition-colors shadow-sm dark:shadow-none ${
-                          phoneError 
-                            ? 'border-[#FA4D09] focus:ring-[#FA4D09] focus:border-[#FA4D09]' 
-                            : 'border-slate-200 dark:border-slate-800 focus:ring-[#FC7A0B] focus:border-[#FC7A0B]'
-                        }`} 
-                      />
-                      {/* Pesan Peringatan Visual Tambahan */}
-                      {phoneError && (
-                        <p className="text-[11px] font-bold text-[#FA4D09] mt-1.5 flex items-center gap-1">
-                          <svg className="w-3.5 h-3.5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" /></svg>
-                          {phoneError}
-                        </p>
-                      )}
-                    </div>
-                  </div>
-                  <div>
-                    <label className="block text-[11px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400 mb-1.5">Alamat Lengkap</label>
-                    <textarea 
-                      rows={3} 
-                      placeholder="Masukkan alamat lengkap perusahaan..." 
-                      className="w-full bg-slate-50 dark:bg-slate-950/50 border border-slate-200 dark:border-slate-800 text-slate-900 dark:text-slate-200 text-sm rounded-xl focus:ring-[#FC7A0B] focus:border-[#FC7A0B] block p-3 outline-none transition-colors resize-none shadow-sm dark:shadow-none"
-                    ></textarea>
                   </div>
                 </div>
 
@@ -198,7 +172,7 @@ export default function AddClientModal({ isOpen, onClose }: Props) {
                         Menyimpan...
                       </>
                     ) : (
-                      "Simpan Klien"
+                      "Simpan Perubahan"
                     )}
                   </button>
                 </div>
@@ -221,9 +195,9 @@ export default function AddClientModal({ isOpen, onClose }: Props) {
               <div className="relative z-10 w-20 h-20 bg-emerald-100 dark:bg-emerald-500/20 text-emerald-600 dark:text-emerald-400 rounded-full flex items-center justify-center mb-6 shadow-inner border border-emerald-200 dark:border-emerald-500/20">
                 <svg className="w-10 h-10" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" /></svg>
               </div>
-              <h3 className="relative z-10 text-2xl font-black text-slate-900 dark:text-white mb-2">Klien Berhasil Disimpan!</h3>
+              <h3 className="relative z-10 text-2xl font-black text-slate-900 dark:text-white mb-2">Perubahan Disimpan!</h3>
               <p className="relative z-10 text-sm font-medium text-slate-500 dark:text-slate-400 mb-8 max-w-sm mx-auto">
-                Data klien beserta informasi PIC telah berhasil ditambahkan ke dalam direktori sistem SULO-MIS.
+                Informasi dan detail teknis proyek website berhasil diperbarui ke dalam sistem.
               </p>
               
               <button 
