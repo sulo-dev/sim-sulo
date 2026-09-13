@@ -1,6 +1,8 @@
 "use client";
 
 import Link from "next/link";
+import Image from "next/image";
+import LogoSulo from "../../public/sulodev.png";
 import { usePathname } from "next/navigation";
 import { useTheme } from "next-themes";
 import { useEffect, useState } from "react";
@@ -31,10 +33,13 @@ export default function Sidebar() {
         <div className="flex items-center gap-3">
           {/* Logo Rounded SULO dari folder public */}
           <div className="relative w-10 h-10 rounded-2xl overflow-hidden border border-slate-200 dark:border-slate-800 shadow-sm shrink-0 bg-[#011D58]/5 dark:bg-slate-800 flex items-center justify-center">
-            <img
-              src="/SuloDev.png"
+            <Image
+              src={LogoSulo}
               alt="Logo SULO"
-              className="w-full h-full object-cover rounded-2xl"
+              width ={40}
+              height={40}
+              className="object-cover rounded-2xl"
+              priority // <--- INI SANGAT PENTING
             />
           </div>
           <div>
