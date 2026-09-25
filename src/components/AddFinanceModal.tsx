@@ -2,50 +2,113 @@
 
 import { useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
+import { createFinance } from "@/actions/financeActions"; // <-- Import Server Action
+
+type WebsiteDropdown = { id: number; name: string; clientName: string };
 
 type Props = {
   isOpen: boolean;
   onClose: () => void;
+  websites: WebsiteDropdown[]; // Untuk mengisi opsi dropdown Proyek/Klien
+  onSuccess?: () => void;
+  showToast?: (message: string, type: "success" | "error") => void; 
 };
 
-export default function AddFinanceModal({ isOpen, onClose }: Props) {
+export default function AddFinanceModal({ isOpen, onClose, websites, onSuccess, showToast }: Props) {
   const [isLoading, setIsLoading] = useState(false);
-  const [submitStatus, setSubmitStatus] = useState<'idle' | 'success' | 'error'>('idle');
 
-  // State khusus untuk format mata uang (hanya angka)
+  // State Form 
+  const [websiteId, setWebsiteId] = useState("");
+  const [billingCycle, setBillingCycle] = useState("Bulanan");
   const [revenue, setRevenue] = useState("");
   const [cost, setCost] = useState("");
+  const [nextBilling, setNextBilling] = useState("");
+  const [status, setStatus] = useState("Unpaid");
 
+  // FUNGSI DI-UPGRADE: Otomatis memformat input dengan pemisah ribuan (1.500.000)
   const handleCurrencyChange = (e: React.ChangeEvent<HTMLInputElement>, setter: React.Dispatch<React.SetStateAction<string>>) => {
-    // Hanya sisakan angka
-    const numericValue = e.target.value.replace(/[^0-9]/g, "");
-    setter(numericValue);
+    const inputVal = e.target.value;
+    
+    // Hilangkan semua karakter selain angka
+    const numericValue = inputVal.replace(/[^0-9]/g, "");
+    
+    if (!numericValue) {
+      setter("");
+      return;
+    }
+    
+    // Format dengan titik ala Indonesia
+    const formatted = new Intl.NumberFormat("id-ID").format(Number(numericValue));
+    setter(formatted);
   };
 
   const handleClose = () => {
     onClose();
     setTimeout(() => {
-      setSubmitStatus('idle');
       setIsLoading(false);
+      // Reset Form saat ditutup
+      setWebsiteId("");
+      setBillingCycle("Bulanan");
       setRevenue("");
       setCost("");
+      setNextBilling("");
+      setStatus("Unpaid");
     }, 300);
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsLoading(true);
-    
-    // Simulasi jeda API 1.5 detik
-    setTimeout(() => {
+
+    // 1. VALIDASI KETAT: Pastikan Proyek dipilih
+    if (!websiteId) {
+      if (showToast) showToast("Pilih proyek terlebih dahulu!", "error");
+      else alert("Pilih proyek terlebih dahulu!");
       setIsLoading(false);
-      setSubmitStatus('success');
-      
-      // Auto tutup setelah 2.5 detik
-      setTimeout(() => {
-        handleClose();
-      }, 2500);
-    }, 1500);
+      return;
+    }
+
+    // 2. VALIDASI KETAT: Pastikan Tanggal terisi
+    if (!nextBilling) {
+      if (showToast) showToast("Tanggal penagihan berikutnya wajib diisi!", "error");
+      else alert("Tanggal penagihan berikutnya wajib diisi!");
+      setIsLoading(false);
+      return;
+    }
+
+    // 3. Konversi nilai mata uang kembali ke angka murni untuk Database
+    const cleanRevenue = Number(revenue.replace(/[^0-9]/g, "")) || 0;
+    const cleanCost = Number(cost.replace(/[^0-9]/g, "")) || 0;
+
+    // Siapkan struktur JSON untuk costBreakdown dasar
+    const breakdownData = [
+      {
+        keterangan: "Beban Internal Default",
+        nominal: cleanCost
+      }
+    ];
+
+    const financeData = {
+      websiteId: Number(websiteId),
+      billingCycle: billingCycle,
+      revenue: cleanRevenue,
+      infrastructureCost: cleanCost,
+      costBreakdown: breakdownData, // Menyimpan dalam bentuk JSON array
+      nextBilling: nextBilling,
+      status: status
+    };
+
+    const res = await createFinance(financeData);
+    setIsLoading(false);
+
+    if (res.success) {
+      if (showToast) showToast("Data tagihan / keuangan berhasil ditambahkan!", "success");
+      if (onSuccess) onSuccess();
+      handleClose(); // Langsung tutup modal, ux lebih cepat
+    } else {
+      if (showToast) showToast("Gagal menyimpan tagihan: " + res.message, "error");
+      else alert("Gagal menyimpan tagihan: " + res.message);
+    }
   };
 
   if (!isOpen) return null;
@@ -57,7 +120,7 @@ export default function AddFinanceModal({ isOpen, onClose }: Props) {
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
         exit={{ opacity: 0 }}
-        onClick={submitStatus === 'idle' ? handleClose : undefined}
+        onClick={!isLoading ? handleClose : undefined}
         className="absolute inset-0 bg-slate-900/60 dark:bg-slate-950/80 backdrop-blur-sm cursor-pointer"
       />
 
@@ -70,7 +133,6 @@ export default function AddFinanceModal({ isOpen, onClose }: Props) {
         className="relative w-full max-w-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800/80 rounded-3xl shadow-2xl overflow-hidden z-10"
       >
         <AnimatePresence mode="wait">
-          {submitStatus === 'idle' && (
             <motion.div
               key="form-view"
               initial={{ opacity: 0, x: -20 }}
@@ -105,18 +167,22 @@ export default function AddFinanceModal({ isOpen, onClose }: Props) {
                       <label className="block text-[11px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400 mb-1.5">Proyek & Klien *</label>
                       <select 
                         required
+                        value={websiteId}
+                        onChange={(e) => setWebsiteId(e.target.value)}
                         className="w-full bg-slate-50 dark:bg-slate-950/50 border border-slate-200 dark:border-slate-800 text-slate-900 dark:text-slate-200 text-sm rounded-xl focus:ring-[#FC7A0B] focus:border-[#FC7A0B] block p-3 outline-none transition-colors shadow-sm dark:shadow-none cursor-pointer"
                       >
                         <option value="">-- Pilih Proyek --</option>
-                        <option value="1">Portal Desa Digital</option>
-                        <option value="2">Sikeris Management</option>
-                        <option value="3">Sistem HRD Internal</option>
+                        {websites.map(web => (
+                          <option key={web.id} value={web.id}>{web.name} ({web.clientName})</option>
+                        ))}
                       </select>
                     </div>
                     <div>
                       <label className="block text-[11px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400 mb-1.5">Siklus Penagihan *</label>
                       <select 
                         required
+                        value={billingCycle}
+                        onChange={(e) => setBillingCycle(e.target.value)}
                         className="w-full bg-slate-50 dark:bg-slate-950/50 border border-slate-200 dark:border-slate-800 text-slate-900 dark:text-slate-200 text-sm rounded-xl focus:ring-[#FC7A0B] focus:border-[#FC7A0B] block p-3 outline-none transition-colors shadow-sm dark:shadow-none cursor-pointer"
                       >
                         <option value="Bulanan">Bulanan (Monthly)</option>
@@ -161,10 +227,12 @@ export default function AddFinanceModal({ isOpen, onClose }: Props) {
 
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
                     <div>
-                      <label className="block text-[11px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400 mb-1.5">Tgl. Penagihan *</label>
+                      <label className="block text-[11px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400 mb-1.5">Tgl. Penagihan Berikutnya *</label>
                       <input 
                         type="date" 
                         required 
+                        value={nextBilling}
+                        onChange={(e) => setNextBilling(e.target.value)}
                         className="w-full bg-slate-50 dark:bg-slate-950/50 border border-slate-200 dark:border-slate-800 text-slate-900 dark:text-slate-200 text-sm rounded-xl focus:ring-[#FC7A0B] focus:border-[#FC7A0B] block p-3 outline-none transition-colors shadow-sm dark:shadow-none dark:[color-scheme:dark]" 
                       />
                     </div>
@@ -172,6 +240,8 @@ export default function AddFinanceModal({ isOpen, onClose }: Props) {
                       <label className="block text-[11px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400 mb-1.5">Status Awal *</label>
                       <select 
                         required
+                        value={status}
+                        onChange={(e) => setStatus(e.target.value)}
                         className="w-full bg-slate-50 dark:bg-slate-950/50 border border-slate-200 dark:border-slate-800 text-slate-900 dark:text-slate-200 text-sm rounded-xl focus:ring-[#FC7A0B] focus:border-[#FC7A0B] block p-3 outline-none transition-colors shadow-sm dark:shadow-none cursor-pointer"
                       >
                         <option value="Unpaid">Belum Lunas (Unpaid)</option>
@@ -187,6 +257,7 @@ export default function AddFinanceModal({ isOpen, onClose }: Props) {
                   <button 
                     type="button" 
                     onClick={handleClose} 
+                    disabled={isLoading}
                     className="px-5 py-2.5 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 text-sm font-bold rounded-xl transition-colors"
                   >
                     Batal
@@ -208,36 +279,6 @@ export default function AddFinanceModal({ isOpen, onClose }: Props) {
                 </div>
               </form>
             </motion.div>
-          )}
-
-          {/* Animasi View Sukses */}
-          {submitStatus === 'success' && (
-            <motion.div
-              key="success-view"
-              initial={{ opacity: 0, scale: 0.9 }}
-              animate={{ opacity: 1, scale: 1 }}
-              exit={{ opacity: 0, scale: 0.9 }}
-              transition={{ duration: 0.3, type: 'spring', bounce: 0.4 }}
-              className="p-10 flex flex-col items-center justify-center text-center min-h-[400px] relative overflow-hidden"
-            >
-              <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-48 h-48 bg-emerald-500/20 rounded-full blur-3xl pointer-events-none"></div>
-              
-              <div className="relative z-10 w-20 h-20 bg-emerald-100 dark:bg-emerald-500/20 text-emerald-600 dark:text-emerald-400 rounded-full flex items-center justify-center mb-6 shadow-inner border border-emerald-200 dark:border-emerald-500/20">
-                <svg className="w-10 h-10" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" /></svg>
-              </div>
-              <h3 className="relative z-10 text-2xl font-black text-slate-900 dark:text-white mb-2">Tagihan Berhasil Dibuat!</h3>
-              <p className="relative z-10 text-sm font-medium text-slate-500 dark:text-slate-400 mb-8 max-w-sm mx-auto">
-                Invoice baru telah tercatat dalam sistem keuangan dan akan masuk ke dalam kalkulasi margin.
-              </p>
-              
-              <button 
-                onClick={handleClose} 
-                className="relative z-10 px-8 py-3 bg-[#011D58] hover:bg-[#011D58]/90 text-white text-sm font-bold rounded-xl transition-colors shadow-lg shadow-[#011D58]/20"
-              >
-                Selesai & Tutup
-              </button>
-            </motion.div>
-          )}
         </AnimatePresence>
       </motion.div>
     </div>

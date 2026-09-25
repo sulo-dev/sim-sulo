@@ -1,15 +1,30 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import { Inter } from "next/font/google";
 import "./globals.css";
 import AuthProvider from "@/components/AuthProvider";
-import Sidebar from "@/components/Sidebar";
-import { ThemeProvider } from "next-themes"; // Tambahkan ini
+import { ThemeProvider } from "@/components/ThemeProvider";
 
-const inter = Inter({ subsets: ["latin"] });
+const inter = Inter({ 
+  subsets: ["latin"],
+  variable: "--font-inter",
+  display: "swap",
+});
+
+export const viewport: Viewport = {
+  width: "device-width",
+  initialScale: 1,
+  maximumScale: 1,
+  themeColor: [
+    { media: "(prefers-color-scheme: light)", color: "#f8fafc" },
+    { media: "(prefers-color-scheme: dark)", color: "#020617" },
+  ],
+};
 
 export const metadata: Metadata = {
   title: "SULO-MIS | Management Information System",
-  description: "Internal Management Information System for SULO.dev",
+  description: "Internal Management Information System for SULO.dev. Kelola infrastruktur, finance, dan SDM dalam satu ekosistem.",
+  applicationName: "SULO-MIS",
+  authors: [{ name: "SULO.dev Team" }],
 };
 
 export default function RootLayout({
@@ -19,21 +34,13 @@ export default function RootLayout({
 }) {
   return (
     <html lang="id" suppressHydrationWarning>
-      {/* transisi warna bg agar pergantian tema mulus */}
       <body
-        className={`${inter.className} bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 antialiased selection:bg-indigo-500 selection:text-white transition-colors duration-300`}
+        className={`${inter.variable} ${inter.className} bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 antialiased selection:bg-[#FC7A0B] selection:text-white transition-colors duration-300`}
       >
         <ThemeProvider attribute="class" defaultTheme="dark" enableSystem>
           <AuthProvider>
-            <div className="flex h-screen overflow-hidden">
-              {/* Sidebar dipisah ke komponen mandiri */}
-              <Sidebar />
-
-              {/* Area Konten Utama */}
-              <main className="flex-1 overflow-y-auto bg-gradient-to-br from-slate-50 via-white to-slate-50 dark:from-slate-950 dark:via-slate-900 dark:to-slate-950 p-8 transition-colors duration-300">
-                {children}
-              </main>
-            </div>
+            {/* Langsung render children tanpa sidebar global */}
+            {children}
           </AuthProvider>
         </ThemeProvider>
       </body>

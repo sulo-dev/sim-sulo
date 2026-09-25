@@ -27,7 +27,7 @@ export default function LoginPage() {
       setError("Email atau password salah.");
       setIsLoading(false);
     } else {
-      router.push("/"); // Arahkan ke Dashboard jika sukses
+      router.push("/dashboard"); // Arahkan ke Dashboard jika sukses
       router.refresh();
     }
   };

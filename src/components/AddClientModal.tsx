@@ -2,65 +2,74 @@
 
 import { useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
+import { createClient } from "@/actions/clientActions"; 
 
 type Props = {
   isOpen: boolean;
-  onClose: () => void;
+  onClose: (isSuccess?: boolean) => void;
+  onSuccess?: () => void; // Dibuat opsional agar aman
 };
 
-export default function AddClientModal({ isOpen, onClose }: Props) {
+export default function AddClientModal({ isOpen, onClose, onSuccess }: Props) {
   const [isLoading, setIsLoading] = useState(false);
   const [submitStatus, setSubmitStatus] = useState<'idle' | 'success' | 'error'>('idle');
-  
-  // State untuk nomor telepon & pesan error validasi
-  const [phone, setPhone] = useState("");
-  const [phoneError, setPhoneError] = useState("");
 
-  // Handler untuk menyaring input agar HANYA ANGKA
-  const handlePhoneChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const value = e.target.value;
-    const numericValue = value.replace(/[^0-9]/g, "");
-    setPhone(numericValue);
-    
-    // Hapus pesan error jika sudah mencapai/lebih dari 10 digit
-    if (numericValue.length >= 10) {
-      setPhoneError("");
-    }
-  };
-
-  // Fungsi penutupan modal dengan reset state
-  const handleClose = () => {
-    onClose();
+  const handleClose = (isSuccess = false) => {
+    onClose(isSuccess);
     setTimeout(() => {
       setSubmitStatus('idle');
       setIsLoading(false);
-      setPhone("");
-      setPhoneError("");
     }, 300);
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
+    setIsLoading(true);
+
+    const formData = new FormData(e.currentTarget);
     
-    // VALIDASI GANDA: Pastikan minimal 10 digit sebelum memproses
-    if (phone.length < 10) {
-      setPhoneError("Nomor telepon tidak valid (wajib minimal 10 digit angka).");
-      return; // Menghentikan eksekusi submit
+    // 1. Ambil data dan bersihkan dari spasi berlebih di awal/akhir menggunakan .trim()
+    const companyName = (formData.get("companyName") as string).trim();
+    const picName = (formData.get("picName") as string).trim();
+    const email = (formData.get("email") as string).trim();
+
+    // 2. VALIDASI KETAT: Cegah input yang hanya berisi spasi kosong
+    if (!companyName || !picName || !email) {
+      alert("Semua kolom wajib diisi dan tidak boleh hanya berisi spasi kosong!");
+      setIsLoading(false);
+      return;
     }
 
-    setPhoneError("");
-    setIsLoading(true);
-    
-    // Simulasi proses penyimpanan API (1.5 detik)
-    setTimeout(() => {
+    // 3. VALIDASI KETAT: Pastikan format email benar-benar valid (bukan sekadar pakai @)
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(email)) {
+      alert("Format email tidak valid! Pastikan tidak ada spasi dan formatnya benar (contoh: budi@domain.com).");
       setIsLoading(false);
-      setSubmitStatus('success');
+      return;
+    }
+
+    // Jika lolos semua validasi, masukkan data bersih (yang sudah di-trim)
+    const data = {
+      companyName,
+      picName,
+      email,
+    };
+
+    const result = await createClient(data);
+
+    setIsLoading(false);
+
+    if (result.success) {
+      // Panggil notifikasi seketika tanpa jeda
+      onSuccess?.(); 
       
-      // Tutup otomatis setelah 2.5 detik
+      setSubmitStatus('success');
       setTimeout(() => {
-        handleClose();
-      }, 2500);
-    }, 1500);
+        handleClose(true);
+      }, 1500); // Jeda dipercepat menjadi 1.5 detik
+    } else {
+      alert("Error: " + result.message);
+    }
   };
 
   if (!isOpen) return null;
@@ -72,7 +81,7 @@ export default function AddClientModal({ isOpen, onClose }: Props) {
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
         exit={{ opacity: 0 }}
-        onClick={submitStatus === 'idle' ? handleClose : undefined}
+        onClick={submitStatus === 'idle' ? () => handleClose(false) : undefined}
         className="absolute inset-0 bg-slate-900/60 dark:bg-slate-950/80 backdrop-blur-sm cursor-pointer"
       />
 
@@ -105,7 +114,8 @@ export default function AddClientModal({ isOpen, onClose }: Props) {
                   </div>
                 </div>
                 <button 
-                  onClick={handleClose}
+                  type="button"
+                  onClick={() => handleClose()}
                   className="text-slate-400 hover:text-[#FA4D09] bg-slate-200/50 dark:bg-slate-800 p-2 rounded-xl transition-colors"
                 >
                   <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
@@ -119,6 +129,7 @@ export default function AddClientModal({ isOpen, onClose }: Props) {
                     <div>
                       <label className="block text-[11px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400 mb-1.5">Nama Perusahaan *</label>
                       <input 
+                        name="companyName" 
                         type="text" 
                         required 
                         placeholder="Contoh: PT. SULO Teknologi" 
@@ -128,53 +139,23 @@ export default function AddClientModal({ isOpen, onClose }: Props) {
                     <div>
                       <label className="block text-[11px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400 mb-1.5">Nama PIC *</label>
                       <input 
+                        name="picName" 
                         type="text" 
                         required 
                         placeholder="Contoh: Budi Santoso" 
                         className="w-full bg-slate-50 dark:bg-slate-950/50 border border-slate-200 dark:border-slate-800 text-slate-900 dark:text-slate-200 text-sm rounded-xl focus:ring-[#FC7A0B] focus:border-[#FC7A0B] block p-3 outline-none transition-colors shadow-sm dark:shadow-none" 
                       />
                     </div>
-                    <div>
-                      <label className="block text-[11px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400 mb-1.5">Email Kontak</label>
+                    <div className="sm:col-span-2">
+                      <label className="block text-[11px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400 mb-1.5">Email Kontak *</label>
                       <input 
+                        name="email" 
                         type="email" 
+                        required
                         placeholder="budi@perusahaan.com" 
                         className="w-full bg-slate-50 dark:bg-slate-950/50 border border-slate-200 dark:border-slate-800 text-slate-900 dark:text-slate-200 text-sm rounded-xl focus:ring-[#FC7A0B] focus:border-[#FC7A0B] block p-3 outline-none transition-colors shadow-sm dark:shadow-none" 
                       />
                     </div>
-                    <div>
-                      <label className="block text-[11px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400 mb-1.5">Nomor Telepon / WA *</label>
-                      <input 
-                        type="text" 
-                        inputMode="numeric"
-                        required // <-- Pastikan ini ada
-                        minLength={10} // <-- BLOKIR JIKA KURANG DARI 10 DIGIT
-                        maxLength={15} // <-- MAKSIMAL 15 DIGIT ANGKA
-                        value={phone}
-                        onChange={handlePhoneChange}
-                        placeholder="081234567890" 
-                        className={`w-full bg-slate-50 dark:bg-slate-950/50 border text-slate-900 dark:text-slate-200 text-sm rounded-xl block p-3 outline-none transition-colors shadow-sm dark:shadow-none ${
-                          phoneError 
-                            ? 'border-[#FA4D09] focus:ring-[#FA4D09] focus:border-[#FA4D09]' 
-                            : 'border-slate-200 dark:border-slate-800 focus:ring-[#FC7A0B] focus:border-[#FC7A0B]'
-                        }`} 
-                      />
-                      {/* Pesan Peringatan Visual Tambahan */}
-                      {phoneError && (
-                        <p className="text-[11px] font-bold text-[#FA4D09] mt-1.5 flex items-center gap-1">
-                          <svg className="w-3.5 h-3.5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" /></svg>
-                          {phoneError}
-                        </p>
-                      )}
-                    </div>
-                  </div>
-                  <div>
-                    <label className="block text-[11px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400 mb-1.5">Alamat Lengkap</label>
-                    <textarea 
-                      rows={3} 
-                      placeholder="Masukkan alamat lengkap perusahaan..." 
-                      className="w-full bg-slate-50 dark:bg-slate-950/50 border border-slate-200 dark:border-slate-800 text-slate-900 dark:text-slate-200 text-sm rounded-xl focus:ring-[#FC7A0B] focus:border-[#FC7A0B] block p-3 outline-none transition-colors resize-none shadow-sm dark:shadow-none"
-                    ></textarea>
                   </div>
                 </div>
 
@@ -182,7 +163,7 @@ export default function AddClientModal({ isOpen, onClose }: Props) {
                 <div className="p-6 border-t border-slate-100 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-900/30 flex justify-end gap-3">
                   <button 
                     type="button" 
-                    onClick={handleClose} 
+                    onClick={() => handleClose()} 
                     className="px-5 py-2.5 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 text-sm font-bold rounded-xl transition-colors"
                   >
                     Batal
@@ -223,15 +204,8 @@ export default function AddClientModal({ isOpen, onClose }: Props) {
               </div>
               <h3 className="relative z-10 text-2xl font-black text-slate-900 dark:text-white mb-2">Klien Berhasil Disimpan!</h3>
               <p className="relative z-10 text-sm font-medium text-slate-500 dark:text-slate-400 mb-8 max-w-sm mx-auto">
-                Data klien beserta informasi PIC telah berhasil ditambahkan ke dalam direktori sistem SULO-MIS.
+                Data klien beserta informasi PIC telah berhasil ditambahkan ke dalam database.
               </p>
-              
-              <button 
-                onClick={handleClose} 
-                className="relative z-10 px-8 py-3 bg-[#011D58] hover:bg-[#011D58]/90 text-white text-sm font-bold rounded-xl transition-colors shadow-lg shadow-[#011D58]/20"
-              >
-                Selesai & Tutup
-              </button>
             </motion.div>
           )}
         </AnimatePresence>
