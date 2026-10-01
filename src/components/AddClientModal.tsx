@@ -7,52 +7,78 @@ import { createClient } from "@/actions/clientActions";
 type Props = {
   isOpen: boolean;
   onClose: (isSuccess?: boolean) => void;
-  onSuccess?: () => void; // Dibuat opsional agar aman
+  onSuccess?: () => void; 
+};
+
+// Tipe data untuk menyimpan pesan error masing-masing field
+type FormErrors = {
+  companyName?: string;
+  picName?: string;
+  email?: string;
+  phone?: string;
+  general?: string;
 };
 
 export default function AddClientModal({ isOpen, onClose, onSuccess }: Props) {
   const [isLoading, setIsLoading] = useState(false);
-  const [submitStatus, setSubmitStatus] = useState<'idle' | 'success' | 'error'>('idle');
+  const [submitStatus, setSubmitStatus] = useState<'idle' | 'success'>('idle');
+  
+  const [errors, setErrors] = useState<FormErrors>({});
 
   const handleClose = (isSuccess = false) => {
     onClose(isSuccess);
     setTimeout(() => {
       setSubmitStatus('idle');
       setIsLoading(false);
+      setErrors({}); 
     }, 300);
   };
 
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
-    setIsLoading(true);
+    setErrors({}); 
 
     const formData = new FormData(e.currentTarget);
     
-    // 1. Ambil data dan bersihkan dari spasi berlebih di awal/akhir menggunakan .trim()
-    const companyName = (formData.get("companyName") as string).trim();
-    const picName = (formData.get("picName") as string).trim();
-    const email = (formData.get("email") as string).trim();
+    const companyName = (formData.get("companyName") as string || "").trim();
+    const picName = (formData.get("picName") as string || "").trim();
+    const email = (formData.get("email") as string || "").trim();
+    const rawPhone = (formData.get("phone") as string || "").trim();
+    const status = (formData.get("status") as string) || "Active";
 
-    // 2. VALIDASI KETAT: Cegah input yang hanya berisi spasi kosong
-    if (!companyName || !picName || !email) {
-      alert("Semua kolom wajib diisi dan tidak boleh hanya berisi spasi kosong!");
-      setIsLoading(false);
+    let newErrors: FormErrors = {};
+    const cleanPhone = rawPhone.replace(/\D/g, ''); // Ambil angkanya saja untuk divalidasi
+
+    // Logika Validasi Sekuensial (Muncul Satu per Satu)
+    if (!companyName) {
+      newErrors.companyName = "Nama perusahaan wajib diisi.";
+    } else if (!picName) {
+      newErrors.picName = "Nama PIC wajib diisi.";
+    } else if (!email) {
+      newErrors.email = "Email kontak wajib diisi.";
+    } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+      newErrors.email = "Format email tidak valid (contoh: nama@domain.com).";
+    } else if (!rawPhone) {
+      newErrors.phone = "No. WhatsApp wajib diisi.";
+    } else if (cleanPhone.length < 10 || cleanPhone.length > 15) {
+      newErrors.phone = "Nomor harus berupa angka (10-15 digit).";
+    }
+
+    // Jika ada error (1 error saja yang tertangkap), jangan lanjut submit
+    if (Object.keys(newErrors).length > 0) {
+      setErrors(newErrors);
       return;
     }
 
-    // 3. VALIDASI KETAT: Pastikan format email benar-benar valid (bukan sekadar pakai @)
-    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-    if (!emailRegex.test(email)) {
-      alert("Format email tidak valid! Pastikan tidak ada spasi dan formatnya benar (contoh: budi@domain.com).");
-      setIsLoading(false);
-      return;
-    }
+    // Jika semua lolos, mulai proses submit
+    setIsLoading(true);
 
-    // Jika lolos semua validasi, masukkan data bersih (yang sudah di-trim)
     const data = {
       companyName,
       picName,
       email,
+      phone: cleanPhone,
+      status,
     };
 
     const result = await createClient(data);
@@ -60,15 +86,19 @@ export default function AddClientModal({ isOpen, onClose, onSuccess }: Props) {
     setIsLoading(false);
 
     if (result.success) {
-      // Panggil notifikasi seketika tanpa jeda
       onSuccess?.(); 
-      
       setSubmitStatus('success');
       setTimeout(() => {
         handleClose(true);
-      }, 1500); // Jeda dipercepat menjadi 1.5 detik
+      }, 1500); 
     } else {
-      alert("Error: " + result.message);
+      setErrors({ general: result.message || "Gagal menyimpan klien baru." });
+    }
+  };
+
+  const clearError = (fieldName: keyof FormErrors) => {
+    if (errors[fieldName]) {
+      setErrors((prev) => ({ ...prev, [fieldName]: undefined }));
     }
   };
 
@@ -110,12 +140,12 @@ export default function AddClientModal({ isOpen, onClose, onSuccess }: Props) {
                   </span>
                   <div>
                     <h3 className="text-lg font-bold text-slate-900 dark:text-white">Tambah Klien Baru</h3>
-                    <p className="text-xs font-medium text-slate-500 mt-0.5">Registrasi data perusahaan & PIC klien.</p>
+                    <p className="text-xs font-medium text-slate-500 mt-0.5">Registrasi data perusahaan, PIC, dan nomor WhatsApp.</p>
                   </div>
                 </div>
                 <button 
                   type="button"
-                  onClick={() => handleClose()}
+                  onClick={() => handleClose(false)}
                   className="text-slate-400 hover:text-[#FA4D09] bg-slate-200/50 dark:bg-slate-800 p-2 rounded-xl transition-colors"
                 >
                   <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
@@ -123,47 +153,121 @@ export default function AddClientModal({ isOpen, onClose, onSuccess }: Props) {
               </div>
 
               {/* Form Body */}
-              <form onSubmit={handleSubmit}>
+              <form onSubmit={handleSubmit} noValidate>
                 <div className="p-6 space-y-5">
+                  
+                  {errors.general && (
+                    <div className="p-3 bg-rose-50 text-rose-600 dark:bg-rose-500/10 dark:text-rose-400 rounded-xl text-sm font-bold border border-rose-200 dark:border-rose-500/20 flex items-center gap-2">
+                      <svg className="w-4 h-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" /></svg>
+                      {errors.general}
+                    </div>
+                  )}
+
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
                     <div>
                       <label className="block text-[11px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400 mb-1.5">Nama Perusahaan *</label>
                       <input 
                         name="companyName" 
                         type="text" 
-                        required 
                         placeholder="Contoh: PT. SULO Teknologi" 
-                        className="w-full bg-slate-50 dark:bg-slate-950/50 border border-slate-200 dark:border-slate-800 text-slate-900 dark:text-slate-200 text-sm rounded-xl focus:ring-[#FC7A0B] focus:border-[#FC7A0B] block p-3 outline-none transition-colors shadow-sm dark:shadow-none" 
+                        onChange={() => clearError('companyName')}
+                        className={`w-full bg-slate-50 dark:bg-slate-950/50 border text-sm rounded-xl p-3 outline-none transition-colors shadow-sm dark:shadow-none ${
+                          errors.companyName 
+                            ? 'border-rose-500 focus:border-rose-500 focus:ring-1 focus:ring-rose-500 text-rose-900' 
+                            : 'border-slate-200 dark:border-slate-800 focus:border-[#FC7A0B] focus:ring-1 focus:ring-[#FC7A0B] text-slate-900 dark:text-slate-200'
+                        }`} 
                       />
+                      {errors.companyName && (
+                        <p className="text-rose-500 text-xs mt-1.5 font-medium flex items-center gap-1">
+                          <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+                          {errors.companyName}
+                        </p>
+                      )}
                     </div>
                     <div>
                       <label className="block text-[11px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400 mb-1.5">Nama PIC *</label>
                       <input 
                         name="picName" 
                         type="text" 
-                        required 
                         placeholder="Contoh: Budi Santoso" 
-                        className="w-full bg-slate-50 dark:bg-slate-950/50 border border-slate-200 dark:border-slate-800 text-slate-900 dark:text-slate-200 text-sm rounded-xl focus:ring-[#FC7A0B] focus:border-[#FC7A0B] block p-3 outline-none transition-colors shadow-sm dark:shadow-none" 
+                        onChange={() => clearError('picName')}
+                        className={`w-full bg-slate-50 dark:bg-slate-950/50 border text-sm rounded-xl p-3 outline-none transition-colors shadow-sm dark:shadow-none ${
+                          errors.picName 
+                            ? 'border-rose-500 focus:border-rose-500 focus:ring-1 focus:ring-rose-500 text-rose-900' 
+                            : 'border-slate-200 dark:border-slate-800 focus:border-[#FC7A0B] focus:ring-1 focus:ring-[#FC7A0B] text-slate-900 dark:text-slate-200'
+                        }`} 
                       />
+                      {errors.picName && (
+                        <p className="text-rose-500 text-xs mt-1.5 font-medium flex items-center gap-1">
+                          <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+                          {errors.picName}
+                        </p>
+                      )}
                     </div>
-                    <div className="sm:col-span-2">
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
+                    <div>
                       <label className="block text-[11px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400 mb-1.5">Email Kontak *</label>
                       <input 
                         name="email" 
-                        type="email" 
-                        required
+                        type="text" 
                         placeholder="budi@perusahaan.com" 
-                        className="w-full bg-slate-50 dark:bg-slate-950/50 border border-slate-200 dark:border-slate-800 text-slate-900 dark:text-slate-200 text-sm rounded-xl focus:ring-[#FC7A0B] focus:border-[#FC7A0B] block p-3 outline-none transition-colors shadow-sm dark:shadow-none" 
+                        onChange={() => clearError('email')}
+                        className={`w-full bg-slate-50 dark:bg-slate-950/50 border text-sm rounded-xl p-3 outline-none transition-colors shadow-sm dark:shadow-none ${
+                          errors.email 
+                            ? 'border-rose-500 focus:border-rose-500 focus:ring-1 focus:ring-rose-500 text-rose-900' 
+                            : 'border-slate-200 dark:border-slate-800 focus:border-[#FC7A0B] focus:ring-1 focus:ring-[#FC7A0B] text-slate-900 dark:text-slate-200'
+                        }`} 
                       />
+                      {errors.email && (
+                        <p className="text-rose-500 text-xs mt-1.5 font-medium flex items-center gap-1">
+                          <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+                          {errors.email}
+                        </p>
+                      )}
                     </div>
+                    <div>
+                      <label className="block text-[11px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400 mb-1.5">No. WhatsApp PIC *</label>
+                      <input 
+                        name="phone" 
+                        type="text" 
+                        placeholder="Contoh: 081234567890" 
+                        onChange={() => clearError('phone')}
+                        className={`w-full bg-slate-50 dark:bg-slate-950/50 border text-sm rounded-xl p-3 outline-none transition-colors shadow-sm dark:shadow-none font-mono ${
+                          errors.phone 
+                            ? 'border-rose-500 focus:border-rose-500 focus:ring-1 focus:ring-rose-500 text-rose-900' 
+                            : 'border-slate-200 dark:border-slate-800 focus:border-[#FC7A0B] focus:ring-1 focus:ring-[#FC7A0B] text-slate-900 dark:text-slate-200'
+                        }`} 
+                      />
+                      {errors.phone && (
+                        <p className="text-rose-500 text-xs mt-1.5 font-medium flex items-center gap-1">
+                          <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+                          {errors.phone}
+                        </p>
+                      )}
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="block text-[11px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400 mb-1.5">Status Klien *</label>
+                    <select 
+                      name="status"
+                      defaultValue="Active"
+                      className="w-full bg-slate-50 dark:bg-slate-950/50 border border-slate-200 dark:border-slate-800 text-slate-900 dark:text-slate-200 text-sm rounded-xl p-3 outline-none focus:ring-[#FC7A0B] focus:border-[#FC7A0B] cursor-pointer"
+                    >
+                      <option value="Active">Active (Klien Aktif)</option>
+                      <option value="Prospek">Prospek (Calon Klien)</option>
+                      <option value="Internal">Internal</option>
+                      <option value="Inactive">Inactive</option>
+                    </select>
                   </div>
                 </div>
 
-                {/* Footer Actions */}
                 <div className="p-6 border-t border-slate-100 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-900/30 flex justify-end gap-3">
                   <button 
                     type="button" 
-                    onClick={() => handleClose()} 
+                    onClick={() => handleClose(false)} 
                     className="px-5 py-2.5 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 text-sm font-bold rounded-xl transition-colors"
                   >
                     Batal
@@ -187,7 +291,6 @@ export default function AddClientModal({ isOpen, onClose, onSuccess }: Props) {
             </motion.div>
           )}
 
-          {/* Animasi View Sukses */}
           {submitStatus === 'success' && (
             <motion.div
               key="success-view"
@@ -204,7 +307,7 @@ export default function AddClientModal({ isOpen, onClose, onSuccess }: Props) {
               </div>
               <h3 className="relative z-10 text-2xl font-black text-slate-900 dark:text-white mb-2">Klien Berhasil Disimpan!</h3>
               <p className="relative z-10 text-sm font-medium text-slate-500 dark:text-slate-400 mb-8 max-w-sm mx-auto">
-                Data klien beserta informasi PIC telah berhasil ditambahkan ke dalam database.
+                Data klien beserta kontak WhatsApp PIC telah berhasil ditambahkan.
               </p>
             </motion.div>
           )}

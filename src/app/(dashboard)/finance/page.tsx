@@ -2,21 +2,21 @@ import { sql } from "@/lib/db";
 import { Metadata } from "next";
 import FinanceClient from "./FinanceClient";
 
-// 1. Mencegah Caching Statis (Force Dynamic)
-// Memastikan data laporan keuangan selalu up-to-date (real-time) setiap halaman direfresh
+// Mencegah Caching Statis (Force Dynamic)
+// Memastikan data laporan keuangan selalu up-to-date (real-time) setiap kali halaman direfresh
 export const dynamic = "force-dynamic";
 
-// 2. Metadata untuk SEO dan Judul Tab Browser
+// Metadata untuk SEO dan Judul Tab Browser Resmi SULO-MIS
 export const metadata: Metadata = {
-  title: "Laporan Keuangan | SULOMIS",
-  description: "Pantau arus kas, biaya server bulanan, dan margin keuntungan tiap proyek klien.",
+  title: "Laporan Keuangan | SULO-MIS",
+  description:
+    "Pantau arus kas, biaya server bulanan, dan margin keuntungan tiap proyek klien SULO.",
 };
 
 export default async function FinancePage() {
   try {
-    // 1. Ambil data tagihan keuangan beserta ID Website (website_id)
-    // Diubah menjadi DESC agar tagihan terbaru berada di posisi teratas
-    const financesQuery = await sql`
+    // 1. Ambil Data Tagihan Keuangan Beserta Website & Client
+    const financesQuery: any = await sql`
       SELECT 
         f.id,
         f.website_id,
@@ -34,17 +34,21 @@ export default async function FinancePage() {
       ORDER BY f.id DESC
     `;
 
-    // 2. Ambil data List Proyek untuk Dropdown di Add & Edit form
-    const websitesQuery = await sql`
+    // 2. Ambil Data List Proyek untuk Dropdown di Add & Edit Form
+    const websitesQuery: any = await sql`
       SELECT w.id, w.name, c.company_name AS client_name
       FROM websites w
       JOIN clients c ON w.client_id = c.id
       ORDER BY w.name ASC
     `;
 
-    // Pastikan query mengembalikan array (menyesuaikan driver database postgres/neon)
-    const financeRows = Array.isArray(financesQuery) ? financesQuery : (financesQuery as any).rows || [];
-    const websiteRows = Array.isArray(websitesQuery) ? websitesQuery : (websitesQuery as any).rows || [];
+    // Pastikan Query Mengembalikan Array Aman
+    const financeRows = Array.isArray(financesQuery)
+      ? financesQuery
+      : financesQuery?.rows || [];
+    const websiteRows = Array.isArray(websitesQuery)
+      ? websitesQuery
+      : websitesQuery?.rows || [];
 
     // Format Data Keuangan
     const formattedFinances = financeRows.map((f: any) => {
@@ -52,47 +56,73 @@ export default async function FinancePage() {
       const cost = Number(f.infrastructure_cost || 0);
       const profit = revenue - cost;
 
+      let nextBillingStr = "-";
+      if (f.next_billing) {
+        const d = new Date(f.next_billing);
+        nextBillingStr = !isNaN(d.getTime())
+          ? d.toISOString()
+          : String(f.next_billing);
+      }
+
       return {
         id: Number(f.id),
-        websiteId: Number(f.website_id), // Penting: Untuk auto-select di form Edit
+        websiteId: Number(f.website_id),
         websiteName: f.website_name || "Proyek Tidak Diketahui",
         clientName: f.client_name || "Klien Tidak Diketahui",
         billingCycle: f.billing_cycle || "-",
         revenue: revenue,
         cost: cost,
         profit: profit,
-        costBreakdown: f.cost_breakdown || [], 
-        nextBilling: f.next_billing || "-",
+        costBreakdown: f.cost_breakdown || [],
+        nextBilling: nextBillingStr,
         status: f.status || "Unpaid",
       };
     });
 
-    // Format Data Website (Dropdown List)
+    // Format Data Website Dropdown
     const formattedWebsites = websiteRows.map((w: any) => ({
       id: Number(w.id),
-      name: w.name,
-      clientName: w.client_name || "Tanpa Klien"
+      name: String(w.name),
+      clientName: w.client_name || "Tanpa Klien",
     }));
 
-    // 3. Lempar kedua datanya ke Client Component
-    return <FinanceClient initialData={formattedFinances} websites={formattedWebsites} />;
+    // 3. Serialisasi Aman untuk React Client Component
+    const serializedFinances = JSON.parse(JSON.stringify(formattedFinances));
+    const serializedWebsites = JSON.parse(JSON.stringify(formattedWebsites));
 
-  } catch (error) {
-    // 4. Error Boundary (Fallback UI Server-Side) jika Database Terputus
-    console.error("[DB_ERROR] Gagal memuat data laporan keuangan:", error);
-    
     return (
-      <div className="flex flex-col items-center justify-center min-h-[400px] p-8 text-center bg-rose-50 dark:bg-rose-500/10 border border-rose-200 dark:border-rose-500/20 rounded-3xl max-w-7xl mx-auto">
-        <div className="p-4 bg-white dark:bg-slate-900 rounded-full mb-4 shadow-sm border border-rose-100 dark:border-rose-500/30">
-          <svg className="w-8 h-8 text-rose-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+      <FinanceClient
+        initialData={serializedFinances}
+        websites={serializedWebsites}
+      />
+    );
+  } catch (error) {
+    // Log Error Server-Side untuk Kemudahan Debugging
+    console.error("[DB_ERROR] Gagal memuat data laporan keuangan:", error);
+
+    // Fallback UI Elegan SULO-MIS saat Terjadi Kesalahan Database
+    return (
+      <div className="flex flex-col items-center justify-center min-h-[420px] p-8 text-center bg-rose-50/50 dark:bg-rose-500/10 border border-rose-200/80 dark:border-rose-500/20 rounded-3xl max-w-7xl mx-auto backdrop-blur-xl shadow-sm my-8">
+        <div className="w-16 h-16 bg-white dark:bg-slate-900 rounded-2xl flex items-center justify-center text-rose-500 mb-4 shadow-sm border border-rose-100 dark:border-rose-500/20">
+          <svg
+            className="w-8 h-8"
+            fill="none"
+            stroke="currentColor"
+            viewBox="0 0 24 24"
+          >
+            <path
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              strokeWidth={2}
+              d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"
+            />
           </svg>
         </div>
-        <h3 className="font-bold text-xl text-rose-600 dark:text-rose-400 mb-2">
+        <h3 className="font-extrabold text-xl text-slate-900 dark:text-white mb-1.5">
           Gagal Memuat Laporan Keuangan
         </h3>
-        <p className="text-sm text-slate-600 dark:text-slate-400 max-w-md mx-auto">
-          Terjadi kesalahan saat mencoba mengambil data keuangan dari database. Pastikan koneksi server Anda stabil atau hubungi Administrator SULO-MIS.
+        <p className="text-xs font-medium text-slate-500 dark:text-slate-400 max-w-md leading-relaxed mb-6">
+          Terjadi kesalahan saat mencoba mengambil data keuangan dari database SULO-MIS. Pastikan koneksi server Anda stabil.
         </p>
       </div>
     );

@@ -12,22 +12,41 @@ export const metadata: Metadata = {
 };
 
 // Helper super tangguh untuk membaca berbagai format tanggal (Indonesia/Inggris/ISO)
-function parseIndoDate(dateStr: string | null) {
-  if (!dateStr) return new Date(0); // Jika kosong, anggap data lama (awal mula)
-  
-  const monthMap: Record<string, string> = {
-    'Jan': 'Jan', 'Feb': 'Feb', 'Mar': 'Mar', 'Apr': 'Apr', 'Mei': 'May', 'Jun': 'Jun',
-    'Jul': 'Jul', 'Agu': 'Aug', 'Sep': 'Sep', 'Okt': 'Oct', 'Nov': 'Nov', 'Des': 'Dec'
-  };
-  
-  let formattedStr = dateStr;
-  for (const [id, en] of Object.entries(monthMap)) {
-    formattedStr = formattedStr.replace(new RegExp(id, 'gi'), en);
+const parseIndoDate = (dateVal: any) => {
+  if (!dateVal) return new Date(0); // Fallback aman jika kosong
+
+  // 1. JIKA SUDAH BERBENTUK DATE OBJECT (Efek Upgrade Database v2.4)
+  if (dateVal instanceof Date) {
+    return dateVal;
   }
-  
-  const d = new Date(formattedStr);
-  return isNaN(d.getTime()) ? new Date(0) : d;
-}
+
+  // 2. JIKA MASIH STRING, JADIKAN STRING MUTLAK AGAR TIDAK ERROR
+  let formattedStr = String(dateVal);
+
+  // Kamus Bulan Indonesia -> Inggris
+  const monthNames: { [key: string]: string } = {
+    Januari: "January",
+    Februari: "February",
+    Maret: "March",
+    April: "April",
+    Mei: "May",
+    Juni: "June",
+    Juli: "July",
+    Agustus: "August",
+    September: "September",
+    Oktober: "October",
+    November: "November",
+    Desember: "December",
+  };
+
+  // Replace nama bulan
+  for (const [id, en] of Object.entries(monthNames)) {
+    formattedStr = formattedStr.replace(new RegExp(id, "gi"), en);
+  }
+
+  const parsedDate = new Date(formattedStr);
+  return isNaN(parsedDate.getTime()) ? new Date(0) : parsedDate;
+};
 
 export default async function DashboardPage() {
   try {
@@ -106,16 +125,27 @@ export default async function DashboardPage() {
       return daysLeft <= 14 && daysLeft >= 0;
     }).length;
 
-    // 5. Tabel Proyek Terbaru
-    const recentProjects = projectsRows.map((p: any) => ({
-      id: p.id,
-      name: p.web_name,
-      client: p.company_name,
-      status: p.bill_status || 'Internal',
-      nextBilling: p.next_billing || '-'
-    }));
+    // 5. Tabel Proyek Terbaru (Dengan konversi tanggal yang aman)
+    const recentProjects = projectsRows.map((p: any) => {
+      // Ubah [object Date] menjadi format string agar React tidak error saat render
+      let formattedDate = '-';
+      if (p.next_billing) {
+        const d = new Date(p.next_billing);
+        formattedDate = !isNaN(d.getTime()) 
+          ? d.toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' })
+          : String(p.next_billing);
+      }
 
-    // Kirim semua kalkulasi ke Client
+      return {
+        id: p.id,
+        name: p.web_name,
+        client: p.company_name,
+        status: p.bill_status || 'Internal',
+        nextBilling: formattedDate
+      };
+    });
+
+    // Susun data mentah
     const dashboardData = {
       activeClients,
       totalWebsites: websitesRows.length,
@@ -129,7 +159,10 @@ export default async function DashboardPage() {
       mrrTrendData // Data grafik yang sudah 100% riil dari database
     };
 
-    return <DashboardClient data={dashboardData} />;
+    // 6. SERIALIZATION BOUNDARY: Pastikan tidak ada satupun objek Date atau non-primitive yang bocor ke Client
+    const serializedData = JSON.parse(JSON.stringify(dashboardData));
+
+    return <DashboardClient data={serializedData} />;
 
   } catch (error) {
     // Penanganan Error Database (Error Boundary)
